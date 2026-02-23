@@ -19,4 +19,6 @@ Sau này, nếu sang máy mới, bro chỉ cần gõ đúng 1 lệnh:
 `pip install -r requirements.txt`
 => Thế là nó tự động cài hết mọi thứ lằng nhằng cho bro.
 
+> **Dùng PyInstaller** : `pyinstaller --onefile --windowed --icon=stickman_icon.ico --add-data "player.png;." --add-data "enemy.png;." --add-data "bullet.png;." --add-data "background.png;." stickman_game.py`
+
 **Xong xuôi hết rồi, đi "ăn mừng" thôi bro!** Game thành công, SIUUUU! 🐧💻🔥
