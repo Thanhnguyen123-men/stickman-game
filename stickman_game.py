@@ -28,10 +28,27 @@ FONT = pygame.font.SysFont(None, 28)
 
 # ---------------- Helper ----------------
 def resource_path(filename):
-    """Get absolute path to resource, works for PyInstaller"""
+    """Lấy đường dẫn tuyệt đối để chạy được cả khi đóng gói .exe"""
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, filename)
     return os.path.join(os.path.abspath("."), filename)
+
+# --- LOAD TÀI NGUYÊN TRƯỚC (Để diệt Ếch vàng và tối ưu RAM) ---
+try:
+    PLAYER_IMG = pygame.transform.scale(pygame.image.load(resource_path("player.png")), (20, 50))
+    BULLET_IMG = pygame.transform.scale(pygame.image.load(resource_path("bullet.png")), (14, 6))
+    ENEMY_IMG = pygame.transform.scale(pygame.image.load(resource_path("enemy.png")), (30, 36))
+    BG_IMG = pygame.transform.scale(pygame.image.load(resource_path("background.png")), (WIDTH, HEIGHT))
+    # Dùng ảnh player làm Icon Taskbar để không bao giờ thấy Ếch nữa
+    ICON_IMG = pygame.image.load(resource_path("player.png")) 
+except Exception as e:
+    print(f"Lỗi load ảnh (Sus): {e}")
+    # Nếu thiếu ảnh thì tạo Surface tạm để game không bị crash
+    PLAYER_IMG = pygame.Surface((20, 50)); PLAYER_IMG.fill((255, 0, 0))
+    BULLET_IMG = pygame.Surface((14, 6)); BULLET_IMG.fill((255, 255, 0))
+    ENEMY_IMG = pygame.Surface((30, 36)); ENEMY_IMG.fill((0, 255, 0))
+    BG_IMG = pygame.Surface((WIDTH, HEIGHT)); BG_IMG.fill((180, 220, 255))
+    ICON_IMG = PLAYER_IMG
 
 # ---------------- Player ----------------
 class Player:
@@ -43,10 +60,7 @@ class Player:
         self.on_ground = False
         self.alive = True
         self.shoot_cooldown = 0
-
-        # Load image and resize
-        self.image = pygame.image.load(resource_path("player.png")).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (20, 50))
+        self.image = PLAYER_IMG
         self.width = 20
         self.height = 50
 
@@ -67,17 +81,13 @@ class Player:
         self.vy += GRAVITY
         self.y += self.vy
 
-        # Screen bounds
         self.x = max(10, min(WIDTH-10, self.x))
-
-        # Ground
         ground_y = HEIGHT - 40
         if self.y >= ground_y:
             self.y = ground_y
             self.vy = 0
             self.on_ground = True
 
-        # Cooldown
         if self.shoot_cooldown > 0:
             self.shoot_cooldown -= 1
 
@@ -92,9 +102,7 @@ class Bullet:
         self.dir = dir
         self.speed = BULLET_SPEED
         self.life = 80
-
-        self.image = pygame.image.load(resource_path("bullet.png")).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (14, 6))
+        self.image = BULLET_IMG
 
     def rect(self):
         return pygame.Rect(self.x, self.y - 3, 14, 6)
@@ -116,9 +124,7 @@ class Enemy:
         self.speed = speed
         self.dir = -1 if x > WIDTH//2 else 1
         self.alive = True
-
-        self.image = pygame.image.load(resource_path("enemy.png")).convert_alpha()
-        self.image = pygame.transform.scale(self.image, (w, h))
+        self.image = ENEMY_IMG
 
     def rect(self):
         return pygame.Rect(self.x, self.y - self.h, self.w, self.h)
@@ -139,13 +145,13 @@ class Enemy:
 class Game:
     def __init__(self):
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        pygame.display.set_caption("Stickman Game")
+        
+        # --- THIẾT LẬP PHONG THỦY DIỆT ẾCH ---
+        pygame.display.set_caption("Stickman Game - ThanhNguyen Studio ඞ")
+        pygame.display.set_icon(ICON_IMG) 
+        
         self.clock = pygame.time.Clock()
-
-        # Load background
-        self.background = pygame.image.load(resource_path("background.png")).convert()
-        self.background = pygame.transform.scale(self.background, (WIDTH, HEIGHT))
-
+        self.background = BG_IMG
         self.reset()
 
     def reset(self):
@@ -180,7 +186,7 @@ class Game:
                         keys = pygame.key.get_pressed()
                         dir = -1 if keys[pygame.K_LEFT] and not keys[pygame.K_RIGHT] else 1
                         bx = self.player.x + int(copysign(self.player.width//2 + 8, dir))
-                        by = int(self.player.y - self.player.height + 2*10 + 10)
+                        by = int(self.player.y - self.player.height + 30) # Căn chỉnh họng súng
                         self.bullets.append(Bullet(bx, by, dir))
                         self.player.shoot_cooldown = 12
 
@@ -195,24 +201,25 @@ class Game:
             for e in self.enemies[:]:
                 e.update()
 
-            # bullet hits enemy
+            # Bullet hits enemy
             for b in self.bullets[:]:
                 for e in self.enemies[:]:
                     if b.rect().colliderect(e.rect()):
-                        try: self.enemies.remove(e)
-                        except: pass
-                        try: self.bullets.remove(b)
-                        except: pass
+                        if e in self.enemies: self.enemies.remove(e)
+                        if b in self.bullets: self.bullets.remove(b)
                         self.score += 10
                         break
 
-            # player hits enemy
+            # Player hits enemy
             for e in self.enemies:
                 if self.player.rect().colliderect(e.rect()):
                     self.game_over = True
                     self.player.alive = False
 
-            self.score = (pygame.time.get_ticks() - self.start_ticks)//1000 + self.score
+            # Tính điểm theo thời gian sống sót
+            current_score = (pygame.time.get_ticks() - self.start_ticks)//1000 + (self.score)
+            self.display_score = current_score # Dùng biến tạm để hiển thị
+
             if random.random() < SPAWN_CHANCE:
                 self.spawn_enemy()
 
@@ -231,7 +238,8 @@ class Game:
         for e in self.enemies:
             e.draw(self.screen)
 
-        score_surf = FONT.render(f"Score: {self.score}", True, BLACK)
+        score_val = self.display_score if not self.game_over else self.score
+        score_surf = FONT.render(f"Score: {score_val}", True, BLACK)
         self.screen.blit(score_surf, (10, 10))
 
         if self.game_over:
